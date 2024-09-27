@@ -1,0 +1,29 @@
+---
+title: "dataset_intro"
+author: "Sarah Deussing"
+date: "2024-09-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Read Dataset
+```{r Read in data}
+fraud <- read.csv("fraud_data.csv")
+summary(fraud)
+```
+
+Data conversions needed:
+- trans_data_trans time: separate into date + time
+- category: make factor
+- city: make factor
+- state: make factor
+- is_fraud: make factor
+
+Split into training + test sets
+
+Run some exploratory analysis: maybe PCA?
+
+Run logistic regression
