@@ -33,17 +33,21 @@ Data conversions needed:
 
 ##Data Conversion
 ```{r}
-##Seperating the variable 'trans_date_trans_time' into two seperate columns
-fraud$trans_date <- str_split(string = fraud$trans_date_trans_time, pattern = "\\d{2}-\\d{2}-\\d{4}")
-
 fraud[c('trans_date', 'trans_time')] <- str_split_fixed(fraud$trans_date_trans_time, " ", 2)
 fraud
 
 fraud$trans_date <- mdy(fraud$trans_date)
 fraud
 ```
-git config --global user.email("r.steffe8@yahoo.com")
-  git config --global user.name("rsteffe8")
+The response variable is 'is_fraud'. 1 denotes fraud, 0 denotes not fraud.
+
+The five explanatory variables we are looking at are:
+  - Category
+  - Amount
+  - Merchant
+  - Time (Time of day or time of year)
+  - Age from DOB
+dfghjkl
 
 Run some exploratory analysis
 - maybe PCA??
