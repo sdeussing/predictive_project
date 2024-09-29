@@ -9,6 +9,18 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+##Loading Packages
+```{r}
+library(tidyr)
+library(tidyverse)
+library(dplyr)
+library(caret)
+library(ggplot2)
+library(readr)
+library(xgboost)
+library(stringr)
+library(lubridate)
+```
 
 ## Read Dataset
 ```{r Read in data}
@@ -18,6 +30,20 @@ summary(fraud)
 
 Data conversions needed:
 - trans_data_trans time: separate into date + time
+
+##Data Conversion
+```{r}
+##Seperating the variable 'trans_date_trans_time' into two seperate columns
+fraud$trans_date <- str_split(string = fraud$trans_date_trans_time, pattern = "\\d{2}-\\d{2}-\\d{4}")
+
+fraud[c('trans_date', 'trans_time')] <- str_split_fixed(fraud$trans_date_trans_time, " ", 2)
+fraud
+
+fraud$trans_date <- mdy(fraud$trans_date)
+fraud
+```
+git config --global user.email("r.steffe8@yahoo.com")
+  git config --global user.name("rsteffe8")
 
 Run some exploratory analysis
 - maybe PCA??
