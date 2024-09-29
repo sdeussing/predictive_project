@@ -9,6 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
 ## Read Dataset
 ```{r Read in data}
 fraud <- read.csv("fraud_data.csv")
@@ -17,13 +18,17 @@ summary(fraud)
 
 Data conversions needed:
 - trans_data_trans time: separate into date + time
-- category: make factor
-- city: make factor
-- state: make factor
-- is_fraud: make factor
 
-Split into training + test sets
-
-Run some exploratory analysis: maybe PCA?
+Run some exploratory analysis
+- maybe PCA??
+- make a plot of fraud by longtidue/latitude coordinates (sender and merchant)
+- some other plots
 
 Run logistic regression
+- split into training + test sets
+- run lasso logistic regression model
+- look at variance, accuracy, etc.
+- if dataset is unbalanced, balance and run again
+
+Time Series Modeling
+- amount over time
