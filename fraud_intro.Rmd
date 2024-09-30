@@ -39,6 +39,9 @@ fraud$trans_date <- as.Date(fraud$trans_date, "%d-%m-%Y")
 # Make age column
 fraud$dob <- as.Date(fraud$dob, "%d-%m-%Y")
 fraud$age <- floor(interval(fraud$dob, now()) / years(1))
+
+# Make time column
+fraud$time2 <- hm(fraud$trans_time)
 ```
 
 Clean the response variable
@@ -59,8 +62,8 @@ The response variable is 'is_fraud'. 1 denotes fraud, 0 denotes not fraud.
 The five explanatory variables we are looking at are:
   - Category
   - Amount
-  - Merchant
-  - Time (Time of day or time of year)
+  - Job
+  - Time
   - Age
 
 To do this, let's look at plots of each variable with our response (is_fraud).
@@ -77,11 +80,34 @@ ggplot(fraud, aes(x=amt, y=is_fraud)) + geom_boxplot() +
   labs(title = 'Fraud at Different Amounts', x = 'Amount') + 
   coord_cartesian(xlim = c(0, 1500))
 
-# 3. Merchant
+# 3. Job
+job_df <- fraud %>%
+  group_by(job) %>%
+  mutate(is_fraud = as.numeric(is_fraud)) %>%
+  summarize(count_fraud = sum(is_fraud)) %>%
+  arrange(desc(count_fraud)) %>%
+  head(15)
+ggplot(job_df, aes(x=job, y = count_fraud)) + geom_col() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = 'Count of Fraud by Job', x = 'Job') 
 
 # 4. Time
+date_df <- fraud %>%
+  #filter(year(trans_date) == 2019) %>%
+  mutate(month = month(trans_date),
+         is_fraud = as.numeric(is_fraud)) %>%
+  group_by(month) %>%
+  summarize(count_fraud = sum(is_fraud))
+ggplot(date_df, aes(x=month, y = count_fraud)) + geom_col() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(title = 'Count of Fraud Occurrences by Month',
+       x = 'Month January-December')
 
 # 5. Age
+ggplot(fraud, aes(x=age, y=is_fraud)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = 'Fraud at Different Ages', x = 'Age')
 ```
 
 
