@@ -72,6 +72,10 @@ ggplot(fraud, aes(x=category, group = is_fraud, fill = is_fraud)) + geom_bar() +
   labs(title = 'Count of Fraud in Transaction Categories', x = 'Category') 
 
 # 2. Amount
+ggplot(fraud, aes(x=amt, y=is_fraud)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = 'Fraud at Different Amounts', x = 'Amount') + 
+  coord_cartesian(xlim = c(0, 1500))
 
 # 3. Merchant
 
