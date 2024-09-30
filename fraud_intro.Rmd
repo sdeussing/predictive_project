@@ -72,8 +72,11 @@ ggplot(fraud, aes(x=category, group = is_fraud, fill = is_fraud)) + geom_bar() +
   labs(title = 'Count of Fraud in Transaction Categories', x = 'Category') 
 
 # 2. Amount
+
 # 3. Merchant
+
 # 4. Time
+
 # 5. Age
 ```
 
