@@ -78,7 +78,18 @@ ggplot(fraud, aes(x=category, group = is_fraud, fill = is_fraud)) + geom_bar() +
 ```
 
 
-- make a plot of fraud by longtidue/latitude coordinates (sender and merchant)
+- make a plot of fraud by longitude/latitude coordinates (sender and merchant)
+```{r}
+library(sf)
+
+points_md <- st_as_sf(fraud, coords = c('long', 'lat'))
+points_md <- st_set_crs(points, crs = 'EPSG:4326 - WGS 84')
+
+#Plot it:
+ggplot(points_md) + 
+  geom_sf(aes(color = is_fraud))
+```
+
 
 ## Logistic Regression
 Because we have a binary response variable, we can run logistic regression. We are going to do this in 2 ways. First, we will look at the variables we explored above; then, we will run a lasso model with all of our variables.
