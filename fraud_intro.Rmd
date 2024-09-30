@@ -1,6 +1,6 @@
 ---
 title: "dataset_intro"
-author: "Sarah Deussing"
+author: "Sarah Deussing, Ryan Steffe, Taylor Hill"
 date: "2024-09-27"
 output: html_document
 ---
@@ -28,17 +28,32 @@ fraud <- read.csv("fraud_data.csv")
 summary(fraud)
 ```
 
-Data conversions needed:
-- trans_data_trans time: separate into date + time
 
-##Data Conversion
+##Data Cleaning
+There are two columns that contain dates to be converted (trans_date_trans_time and dob). We also want to make an 'age' column from the date of birth.
 ```{r}
+# Make date column
 fraud[c('trans_date', 'trans_time')] <- str_split_fixed(fraud$trans_date_trans_time, " ", 2)
-fraud
+fraud$trans_date <- as.Date(fraud$trans_date, "%d-%m-%Y")
 
-fraud$trans_date <- mdy(fraud$trans_date)
-fraud
+# Make age column
+fraud$dob <- as.Date(fraud$dob, "%d-%m-%Y")
+fraud$age <- floor(interval(fraud$dob, now()) / years(1))
 ```
+
+Clean the response variable
+```{r}
+unique(fraud$is_fraud)
+
+# We see some entries that contain information beyond '1' or '0'.
+fraud$is_fraud <- substring(fraud$is_fraud, 1, 1)
+
+# We also want to convert this to numeric
+fraud$is_fraud <- as.factor(fraud$is_fraud)
+```
+
+
+## Exploratory Plots
 The response variable is 'is_fraud'. 1 denotes fraud, 0 denotes not fraud.
 
 The five explanatory variables we are looking at are:
@@ -46,19 +61,38 @@ The five explanatory variables we are looking at are:
   - Amount
   - Merchant
   - Time (Time of day or time of year)
-  - Age from DOB
-dfghjkl
+  - Age
 
-Run some exploratory analysis
-- maybe PCA??
+To do this, let's look at plots of each variable with our response (is_fraud).
+
+```{r}
+# 1. Category
+ggplot(fraud, aes(x=category, group = is_fraud, fill = is_fraud)) + geom_bar() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = 'Count of Fraud in Transaction Categories', x = 'Category') 
+
+# 2. Amount
+# 3. Merchant
+# 4. Time
+# 5. Age
+```
+
+
 - make a plot of fraud by longtidue/latitude coordinates (sender and merchant)
-- some other plots
 
-Run logistic regression
-- split into training + test sets
-- run lasso logistic regression model
+## Logistic Regression
+Because we have a binary response variable, we can run logistic regression. We are going to do this in 2 ways. First, we will look at the variables we explored above; then, we will run a lasso model with all of our variables.
+
+#### Split into training + test sets
+- split data
+- look at balance, balance if need to.
+
+#### Run Logistic Regression Model
 - look at variance, accuracy, etc.
-- if dataset is unbalanced, balance and run again
 
-Time Series Modeling
+#### Run Lasso Logistic Regression Model
+- look at variance, accuracy, etc.
+
+## Time Series Modeling
 - amount over time
+- fraud over time??
