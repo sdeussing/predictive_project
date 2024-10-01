@@ -45,6 +45,17 @@ fraud$age <- floor(interval(fraud$dob, now()) / years(1))
 
 # Make time column
 fraud$time2 <- hm(fraud$trans_time)
+
+to_seconds <- function(time) {
+  time_parts <- strsplit(time, ":")[[1]]  
+  hours <- as.numeric(time_parts[1])     
+  minutes <- as.numeric(time_parts[2])    
+  
+  total_seconds <- (hours * 3600) + (minutes * 60)  
+  return(total_seconds)
+}
+fraud <- fraud %>%
+  mutate(total_seconds = sapply(trans_time, to_seconds))
 ```
 
 Clean the response variable
@@ -95,6 +106,7 @@ ggplot(job_df, aes(x=job, y = count_fraud)) + geom_col() +
   labs(title = 'Count of Fraud by Job', x = 'Job') 
 
 # 4. Time
+# By Month
 date_df <- fraud %>%
   #filter(year(trans_date) == 2019) %>%
   mutate(month = month(trans_date),
@@ -121,8 +133,20 @@ ggplot(fraud, aes(x=tod, color = is_fraud)) + geom_histogram(fill = "black") +
     panel.grid.major = element_blank()) +
   labs(title = 'Count of Fraud Occurrences by Time of Day',
        x = 'Time of Day')
-random
+please
   
+
+# By Hour of Day
+hour_df <- fraud %>%
+  mutate(hour = total_seconds %/% 3600,
+         is_fraud = as.numeric(is_fraud)) %>%
+  group_by(hour) %>%
+  summarize(count_fraud = sum(is_fraud))
+ggplot(hour_df, aes(x=hour, y=count_fraud)) + geom_line() +
+  labs(title = 'Count of Fraud Occurrences by Hour of Day',
+       x = 'Hour') +
+  theme_minimal()
+bf7630f50fefcb99e36d40fcd5c92095c99a5f4e
 
 # 5. Age
 ggplot(fraud, aes(x=age, y=is_fraud)) + geom_boxplot() +
