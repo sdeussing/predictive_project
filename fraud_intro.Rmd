@@ -20,6 +20,7 @@ library(readr)
 library(xgboost)
 library(stringr)
 library(lubridate)
+library(data.table)
 ```
 
 ## Read Dataset
@@ -34,7 +35,9 @@ There are two columns that contain dates to be converted (trans_date_trans_time 
 ```{r}
 # Make date column
 fraud[c('trans_date', 'trans_time')] <- str_split_fixed(fraud$trans_date_trans_time, " ", 2)
+fraud
 fraud$trans_date <- as.Date(fraud$trans_date, "%d-%m-%Y")
+fraud
 
 # Make age column
 fraud$dob <- as.Date(fraud$dob, "%d-%m-%Y")
@@ -103,6 +106,22 @@ ggplot(date_df, aes(x=month, y = count_fraud)) + geom_col() +
         axis.ticks.x=element_blank()) +
   labs(title = 'Count of Fraud Occurrences by Month',
        x = 'Month January-December')
+
+#Splitting time column
+fraud <- separate(fraud, trans_time, into = c("hours", "minutes"), sep = ":")
+fraud$hours <- as.numeric(fraud$hours)
+fraud$minutes <- as.numeric(fraud$minutes)
+fraud$tod <- (fraud$hours*60)+fraud$minutes
+fraud$tod <- fraud$tod/60
+fraud
+
+#Histogram of fraud occurences by time of day
+ggplot(fraud, aes(x=tod, color = is_fraud)) + geom_histogram(fill = "black") +
+  theme(axis.text.x = element_text(angle = 90), panel.background = element_rect("black"), panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()) +
+  labs(title = 'Count of Fraud Occurrences by Time of Day',
+       x = 'Time of Day') 
+  
 
 # 5. Age
 ggplot(fraud, aes(x=age, y=is_fraud)) + geom_boxplot() +
