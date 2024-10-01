@@ -133,8 +133,7 @@ ggplot(fraud, aes(x=tod, color = is_fraud)) + geom_histogram(fill = "black") +
     panel.grid.major = element_blank()) +
   labs(title = 'Count of Fraud Occurrences by Time of Day',
        x = 'Time of Day')
-please
-  
+random
 
 # By Hour of Day
 hour_df <- fraud %>%
@@ -146,7 +145,6 @@ ggplot(hour_df, aes(x=hour, y=count_fraud)) + geom_line() +
   labs(title = 'Count of Fraud Occurrences by Hour of Day',
        x = 'Hour') +
   theme_minimal()
-bf7630f50fefcb99e36d40fcd5c92095c99a5f4e
 
 # 5. Age
 ggplot(fraud, aes(x=age, y=is_fraud)) + geom_boxplot() +
