@@ -120,7 +120,8 @@ ggplot(fraud, aes(x=tod, color = is_fraud)) + geom_histogram(fill = "black") +
   theme(axis.text.x = element_text(angle = 90), panel.background = element_rect("black"), panel.grid.minor = element_blank(),
     panel.grid.major = element_blank()) +
   labs(title = 'Count of Fraud Occurrences by Time of Day',
-       x = 'Time of Day') 
+       x = 'Time of Day')
+random
   
 
 # 5. Age
