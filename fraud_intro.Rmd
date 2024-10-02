@@ -21,6 +21,7 @@ library(xgboost)
 library(stringr)
 library(lubridate)
 library(data.table)
+library(plyr)
 ```
 
 ## Read Dataset
@@ -35,9 +36,7 @@ There are two columns that contain dates to be converted (trans_date_trans_time 
 ```{r}
 # Make date column
 fraud[c('trans_date', 'trans_time')] <- str_split_fixed(fraud$trans_date_trans_time, " ", 2)
-fraud
 fraud$trans_date <- as.Date(fraud$trans_date, "%d-%m-%Y")
-fraud
 
 # Make age column
 fraud$dob <- as.Date(fraud$dob, "%d-%m-%Y")
@@ -45,17 +44,12 @@ fraud$age <- floor(interval(fraud$dob, now()) / years(1))
 
 # Make time column
 fraud$time2 <- hm(fraud$trans_time)
+fraud <- separate(fraud, trans_time, into = c("hours", "minutes"), sep = ":")
+fraud$hours <- as.numeric(fraud$hours)
+fraud$minutes <- as.numeric(fraud$minutes)
+fraud$total_seconds <- (fraud$hours * 3600) + (fraud$minutes * 60) 
+fraud$tod <- ((fraud$hours*60)+fraud$minutes)/60
 
-to_seconds <- function(time) {
-  time_parts <- strsplit(time, ":")[[1]]  
-  hours <- as.numeric(time_parts[1])     
-  minutes <- as.numeric(time_parts[2])    
-  
-  total_seconds <- (hours * 3600) + (minutes * 60)  
-  return(total_seconds)
-}
-fraud <- fraud %>%
-  mutate(total_seconds = sapply(trans_time, to_seconds))
 ```
 
 Clean the response variable
@@ -119,21 +113,12 @@ ggplot(date_df, aes(x=month, y = count_fraud)) + geom_col() +
   labs(title = 'Count of Fraud Occurrences by Month',
        x = 'Month January-December')
 
-#Splitting time column
-fraud <- separate(fraud, trans_time, into = c("hours", "minutes"), sep = ":")
-fraud$hours <- as.numeric(fraud$hours)
-fraud$minutes <- as.numeric(fraud$minutes)
-fraud$tod <- (fraud$hours*60)+fraud$minutes
-fraud$tod <- fraud$tod/60
-fraud
-
-#Histogram of fraud occurences by time of day
+#By Time of Day
 ggplot(fraud, aes(x=tod, color = is_fraud)) + geom_histogram(fill = "black") +
   theme(axis.text.x = element_text(angle = 90), panel.background = element_rect("black"), panel.grid.minor = element_blank(),
     panel.grid.major = element_blank()) +
   labs(title = 'Count of Fraud Occurrences by Time of Day',
        x = 'Time of Day')
-random
 
 # By Hour of Day
 hour_df <- fraud %>%
@@ -170,6 +155,17 @@ ggplot(points_md) +
 Because we have a binary response variable, we can run logistic regression. We are going to do this in 2 ways. First, we will look at the variables we explored above; then, we will run a lasso model with all of our variables.
 
 #### Split into training + test sets
+```{r}
+# Unbalanced Data
+count(fraud$is_fraud)
+
+fraud$is_fraud <- as.factor(fraud$is_fraud)
+
+
+# randomly select 1500 for each class = train set (3000 entries)
+# randomly select 300 and 300 of what's left = test set (600 entries)
+```
+
 - split data
 - look at balance, balance if need to.
 
