@@ -154,20 +154,37 @@ ggplot(points_md) +
 ## Logistic Regression
 Because we have a binary response variable, we can run logistic regression. We are going to do this in 2 ways. First, we will look at the variables we explored above; then, we will run a lasso model with all of our variables.
 
-#### Split into training + test sets
-```{r}
-# Unbalanced Data
+#### Balance the dataset / Split into training + testing sets
+```{r Balance count}
 count(fraud$is_fraud)
-
-fraud$is_fraud <- as.factor(fraud$is_fraud)
-
-
-# randomly select 1500 for each class = train set (3000 entries)
-# randomly select 300 and 300 of what's left = test set (600 entries)
 ```
 
-- split data
-- look at balance, balance if need to.
+There are 12,601 cases of no-fraud and 1,845 cases of fraud in the dataset.
+For our modeling, we will balance our dataset when we create the train and test sets. To do so, we will randomly sample 1,500 entries from each class to make the train set and 300 entries (of the remaining entries) from each class to make the test set.
+```{r Make train}
+sample_0 <- fraud[fraud$is_fraud == 0, ][sample(nrow(fraud[fraud$is_fraud == 0, ]),
+                                                       1500, replace = FALSE), ]
+sample_1 <- fraud[fraud$is_fraud == 1, ][sample(nrow(fraud[fraud$is_fraud == 1, ]),
+                                              1500, replace = FALSE), ]
+
+train_set <- rbind(sample_0, sample_1)
+```
+
+```{r Make test}
+# need to fix with ids to make sure its truly random
+remaining <- fraud[-c(which(fraud$is_fraud == 0)[1:1500],
+                      which(fraud$is_fraud == 1)[1:1500]), ]
+
+sample_0_rem <- remaining[remaining$is_fraud == 0, ][sample(nrow(remaining[remaining$is_fraud == 0, ]),
+                                                            300, replace = FALSE), ]
+sample_1_rem <- remaining[remaining$is_fraud == 1, ][sample(nrow(remaining[remaining$is_fraud == 1, ]),
+                                                            300, replace = FALSE), ]
+
+# Combine all samples
+test_set <- rbind(sample_0_rem, sample_1_rem)
+```
+
+
 
 #### Run Logistic Regression Model
 - look at variance, accuracy, etc.
