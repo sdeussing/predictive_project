@@ -22,6 +22,7 @@ library(stringr)
 library(lubridate)
 library(data.table)
 library(plyr)
+library(unbalanced)
 ```
 
 ## Read Dataset
@@ -97,7 +98,7 @@ job_df <- fraud %>%
   head(15)
 ggplot(job_df, aes(x=job, y = count_fraud)) + geom_col() +
   theme(axis.text.x = element_text(angle = 90)) +
-  labs(title = 'Count of Fraud by Job', x = 'Job') 
+  labs(title = 'Count of Fraud by Job', x = 'Job')
 
 # 4. Time
 # By Month
@@ -157,6 +158,26 @@ Because we have a binary response variable, we can run logistic regression. We a
 #### Balance the dataset / Split into training + testing sets
 ```{r Balance count}
 count(fraud$is_fraud)
+
+##Displaying that our dataset is unbalanced
+ggplot(data = fraud, aes(fill = is_fraud)) +
+    geom_bar(aes(x = is_fraud))+
+    ggtitle("Number of samples in each class", subtitle = "Original dataset")+
+    xlab("")+
+    ylab("Samples")+
+    scale_y_continuous(expand = c(0,0))+
+    scale_x_discrete(expand = c(0,0))+
+    theme(legend.position = "none", 
+         legend.title = element_blank(),
+         panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank())
+
+##Balancing the dataset through undersampling
+undersampled_data <- ubBalance(c(fraud$merchant, fraud$category, fraud$amt, fraud$city, fraud$state, fraud$lat,),
+                               fraud$is_fraud, 
+                               type='ubUnder',         # Option for undersampling
+                               verbose = TRUE)
 ```
 
 There are 12,601 cases of no-fraud and 1,845 cases of fraud in the dataset.
