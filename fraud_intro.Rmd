@@ -22,7 +22,8 @@ library(stringr)
 library(lubridate)
 library(data.table)
 library(plyr)
-library(unbalanced)
+library(leaflet)
+#library(unbalanced)
 ```
 
 ## Read Dataset
@@ -141,16 +142,21 @@ ggplot(fraud, aes(x=age, y=is_fraud)) + geom_boxplot() +
 
 - make a plot of fraud by longitude/latitude coordinates (sender and merchant)
 ```{r}
-library(sf)
+pallette <- colorFactor(c("blue", "red"), domain = c(0, 1))
 
-points_md <- st_as_sf(fraud, coords = c('long', 'lat'))
-points_md <- st_set_crs(points, crs = 'EPSG:4326 - WGS 84')
-
-#Plot it:
-ggplot(points_md) + 
-  geom_sf(aes(color = is_fraud))
+leaflet(fraud) %>%
+  addTiles() %>%  
+  addCircles(lng = ~long, lat = ~lat, 
+             color = ~pallette(is_fraud), 
+             radius = 5,  
+             fillOpacity = 0.6, 
+             popup = ~paste("Fraud Status:", is_fraud)) %>%
+  addLegend("bottomright", 
+            pal = pal, 
+            values = c(0, 1), 
+            title = "Is Fraud", 
+            labels = c("Not Fraud (0)", "Fraud (1)"))
 ```
-
 
 ## Logistic Regression
 Because we have a binary response variable, we can run logistic regression. We are going to do this in 2 ways. First, we will look at the variables we explored above; then, we will run a lasso model with all of our variables.
@@ -159,7 +165,6 @@ Because we have a binary response variable, we can run logistic regression. We a
 ```{r Balance count}
 count(fraud$is_fraud)
 
-##Displaying that our dataset is unbalanced
 ggplot(data = fraud, aes(fill = is_fraud)) +
     geom_bar(aes(x = is_fraud))+
     ggtitle("Number of samples in each class", subtitle = "Original dataset")+
@@ -183,31 +188,50 @@ undersampled_data <- ubBalance(c(fraud$merchant, fraud$category, fraud$amt, frau
 There are 12,601 cases of no-fraud and 1,845 cases of fraud in the dataset.
 For our modeling, we will balance our dataset when we create the train and test sets. To do so, we will randomly sample 1,500 entries from each class to make the train set and 300 entries (of the remaining entries) from each class to make the test set.
 ```{r Make train}
-sample_0 <- fraud[fraud$is_fraud == 0, ][sample(nrow(fraud[fraud$is_fraud == 0, ]),
-                                                       1500, replace = FALSE), ]
-sample_1 <- fraud[fraud$is_fraud == 1, ][sample(nrow(fraud[fraud$is_fraud == 1, ]),
-                                              1500, replace = FALSE), ]
+fraud$id <- seq_len(nrow(fraud))
+set.seed(1234567)
 
-train_set <- rbind(sample_0, sample_1)
+train1 <- fraud %>% 
+  filter(is_fraud == 1) %>%
+  sample_n(1500)
+
+train0 <- fraud %>% 
+  filter(is_fraud == 0) %>%
+  sample_n(1500)
+
+train_set <- bind_rows(train1, train0)
+
+dim(train_set)
 ```
 
 ```{r Make test}
-# need to fix with ids to make sure its truly random
-remaining <- fraud[-c(which(fraud$is_fraud == 0)[1:1500],
-                      which(fraud$is_fraud == 1)[1:1500]), ]
+train_ids <- train_set$id
+remaining <- fraud %>% 
+  filter(!(id %in% train_ids))
 
-sample_0_rem <- remaining[remaining$is_fraud == 0, ][sample(nrow(remaining[remaining$is_fraud == 0, ]),
-                                                            300, replace = FALSE), ]
-sample_1_rem <- remaining[remaining$is_fraud == 1, ][sample(nrow(remaining[remaining$is_fraud == 1, ]),
-                                                            300, replace = FALSE), ]
+test1 <- remaining %>% 
+  filter(is_fraud == 1) %>%
+  sample_n(300)
 
-# Combine all samples
-test_set <- rbind(sample_0_rem, sample_1_rem)
+test0 <- remaining %>% 
+  filter(is_fraud == 0) %>%
+  sample_n(300)
+
+test_set <- bind_rows(test1, test0)
+
+dim(test_set)
+
+# check identical rows
+copies <- train_set %>%
+  inner_join(test_set, by = names(train_set))
+nrow(copies)
 ```
 
+Now that we have randomly sampled the training and testing data to have equal number of is_fraud cases in each, we can move forward with our modeling. 
 
 
 #### Run Logistic Regression Model
+We are going to run a logistic regression model with a binary outcome variable is_fraud. 
 - look at variance, accuracy, etc.
 
 #### Run Lasso Logistic Regression Model
