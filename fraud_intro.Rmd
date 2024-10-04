@@ -23,6 +23,7 @@ library(lubridate)
 library(data.table)
 library(plyr)
 library(leaflet)
+library(glmnet)
 ```
 
 ## Read Dataset
@@ -290,9 +291,69 @@ Now that we have randomly sampled the training and testing data to have equal nu
 #### Run Logistic Regression Model
 We are going to run a logistic regression model with a binary outcome variable is_fraud. 
 - look at variance, accuracy, etc.
+```{r}
+##Building first logistic model
+glm_fit <- glm(is_fraud~amt+city_pop+tod, data = train_set, family = binomial)
+summary(glm_fit)
+
+##Building second logistic model
+glm_fit2 <- glm(is_fraud~amt+tod+age, data = train_set, family = binomial)
+summary(glm_fit2)
+
+##The AIC score for 'glm_fit2' is lower than 'glm_fit'. Therefore glm_fit2 is preferred##
+
+##Making predictions with the glm_fit2 model##
+glm.probs <- predict(object = glm_fit2, newdata = test_set, type = "response") 
+
+##Making the probabilities into binary/classification##
+cutoff <- 0.5 
+glm.pred <- ifelse(glm.probs>cutoff, "0", "1")
+
+##Making the confusion matrix##
+confusion <- table(glm.pred, test_set$is_fraud)
+confusion
+
+##Calculating the accuracy
+accuracy <- sum(diag(confusion))/sum(confusion)
+accuracy
+
+##Calculating the misclassification rate
+misclassification <- 1 - accuracy
+misclassification
+
+##Calculating the Sensitivity
+sensitivity <- confusion[1, 1] / (confusion[1, 1] + confusion[2, 1])
+sensitivity
+
+##Calculating the Specificity
+specificity <- confusion[2, 2] / (confusion[2, 2] + confusion[1, 2])
+specificity
+```
+
 
 #### Run Lasso Logistic Regression Model
 - look at variance, accuracy, etc.
+```{r}
+##Scaling the training and test datasets
+train_set2 <- train_set %>%
+  select(tod, age, amt)
+train_x_var <- scale(train_set2[, 1:3])
+
+test_set2 <- test_set %>%
+  select(tod, age, amt)
+test_x_var <- scale(test_set2[, 1:3])
+
+##Building the lasso regression model
+fit_3 <- glmnet(x = train_x_var, # Fit explanatory variables
+                y = train_set$is_fraud, # Fit response variable
+                alpha = 1,
+                lambda = 0.5,
+                family = binomial)
+coef(fit_3)
+
+##All the coefficients returned, '.' indicating that they are 0 and essentially insignificant##
+```
+
 
 ## Time Series Modeling
 - amount over time
