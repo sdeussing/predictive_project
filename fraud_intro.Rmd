@@ -23,7 +23,6 @@ library(lubridate)
 library(data.table)
 library(plyr)
 library(leaflet)
-#library(unbalanced)
 ```
 
 ## Read Dataset
@@ -91,25 +90,57 @@ ggplot(fraud, aes(x=amt, y=is_fraud)) + geom_boxplot() +
   coord_cartesian(xlim = c(0, 1500))
 
 # 3. Job
+#job_df <- fraud %>%
+#  group_by(job) %>%
+#  select(is_fraud, job) %>%
+#  mutate(is_fraud = as.numeric(is_fraud)) %>%
+#  mutate(count_fraud = sum(is_fraud)) %>%
+#  arrange(desc(count_fraud)) %>%
+#  head(15)
+#job_df
+#ggplot(job_df, aes(x=job, y = count_fraud)) + geom_col() +
+#  theme(axis.text.x = element_text(angle = 90)) +
+#  labs(title = 'Count of Fraud by Job', x = 'Job')
+
 job_df <- fraud %>%
+  filter(is_fraud == 1) %>%
+  select(is_fraud, job) %>%
   group_by(job) %>%
-  mutate(is_fraud = as.numeric(is_fraud)) %>%
-  summarize(count_fraud = sum(is_fraud)) %>%
-  arrange(desc(count_fraud)) %>%
-  head(15)
-ggplot(job_df, aes(x=job, y = count_fraud)) + geom_col() +
+  count() %>%
+  mutate(freq = freq) %>%
+  arrange(desc(freq)) %>%
+  head(10)
+job_df
+ggplot(job_df, aes(x=reorder(job, -freq), y = freq)) + geom_col() +
   theme(axis.text.x = element_text(angle = 90)) +
   labs(title = 'Count of Fraud by Job', x = 'Job')
 
 # 4. Time
 # By Month
-date_df <- fraud %>%
+#date_df <- fraud %>%
   #filter(year(trans_date) == 2019) %>%
-  mutate(month = month(trans_date),
-         is_fraud = as.numeric(is_fraud)) %>%
+#  mutate(month = month(trans_date),
+#         is_fraud = as.numeric(is_fraud)) %>%
+#  group_by(month) %>%
+#  summarize(count_fraud = sum(is_fraud))
+#date_df
+#ggplot(date_df, aes(x=month, y = count_fraud)) + geom_col() +
+#  theme(axis.text.x=element_blank(),
+#        axis.ticks.x=element_blank()) +
+#  labs(title = 'Count of Fraud Occurrences by Month',
+#       x = 'Month January-December')
+
+date_df <- fraud %>%
+  filter(is_fraud == 1) %>%
+  mutate(month = month(trans_date)) %>%
+  select(is_fraud, month) %>%
   group_by(month) %>%
-  summarize(count_fraud = sum(is_fraud))
-ggplot(date_df, aes(x=month, y = count_fraud)) + geom_col() +
+  count() %>%
+  mutate(month_freq = freq) %>%
+  select(month, month_freq)
+date_df
+
+ggplot(date_df, aes(x=month, y = month_freq)) + geom_col() +
   theme(axis.text.x=element_blank(),
         axis.ticks.x=element_blank()) +
   labs(title = 'Count of Fraud Occurrences by Month',
@@ -123,20 +154,22 @@ ggplot(fraud, aes(x=tod, color = is_fraud)) + geom_histogram(fill = "black") +
        x = 'Time of Day')
 
 # By Hour of Day
-hour_df <- fraud %>%
-  mutate(hour = total_seconds %/% 3600,
-         is_fraud = as.numeric(is_fraud)) %>%
-  group_by(hour) %>%
-  summarize(count_fraud = sum(is_fraud))
-ggplot(hour_df, aes(x=hour, y=count_fraud)) + geom_line() +
-  labs(title = 'Count of Fraud Occurrences by Hour of Day',
-       x = 'Hour') +
-  theme_minimal()
+#hour_df <- fraud %>%
+#  mutate(hour = total_seconds %/% 3600,
+#         is_fraud = as.numeric(is_fraud)) %>%
+#  group_by(hour) %>%
+#  summarize(count_fraud = sum(is_fraud))
+#ggplot(hour_df, aes(x=hour, y=count_fraud)) + geom_line() +
+#  labs(title = 'Count of Fraud Occurrences by Hour of Day',
+#       x = 'Hour') +
+#  theme_minimal()
 
 # 5. Age
 ggplot(fraud, aes(x=age, y=is_fraud)) + geom_boxplot() +
   theme(axis.text.x = element_text(angle = 90)) +
   labs(title = 'Fraud at Different Ages', x = 'Age')
+
+##NOTE: EVERYTHING CODED OUT WAS INFORMATION THAT WAS NOT WORKING. WE MIGHT HAVE TO LOOK INTO THAT. SOME OF THE CODE WAS REVISED IN ORDER FOR IT TO RUN
 ```
 
 
@@ -152,10 +185,12 @@ leaflet(fraud) %>%
              fillOpacity = 0.6, 
              popup = ~paste("Fraud Status:", is_fraud)) %>%
   addLegend("bottomright", 
-            pal = pal, 
+            pal = pallette, 
             values = c(0, 1), 
             title = "Is Fraud", 
             labels = c("Not Fraud (0)", "Fraud (1)"))
+
+##Question: Is our data only for the central and western parts of the United States. Not a big deal if it is, just want to be prepared when asked that question
 ```
 
 ## Logistic Regression
@@ -177,12 +212,6 @@ ggplot(data = fraud, aes(fill = is_fraud)) +
          panel.grid.major = element_blank(),
          panel.grid.minor = element_blank(),
          panel.background = element_blank())
-
-##Balancing the dataset through undersampling
-undersampled_data <- ubBalance(c(fraud$merchant, fraud$category, fraud$amt, fraud$city, fraud$state, fraud$lat,),
-                               fraud$is_fraud, 
-                               type='ubUnder',         # Option for undersampling
-                               verbose = TRUE)
 ```
 
 There are 12,601 cases of no-fraud and 1,845 cases of fraud in the dataset.
@@ -225,6 +254,34 @@ dim(test_set)
 copies <- train_set %>%
   inner_join(test_set, by = names(train_set))
 nrow(copies)
+
+# Runnning the ggplot again to display the balanced data in the train_set
+ggplot(data = train_set, aes(fill = is_fraud)) +
+    geom_bar(aes(x = is_fraud))+
+    ggtitle("Number of samples in each class", subtitle = "Train Set")+
+    xlab("")+
+    ylab("Samples")+
+    scale_y_continuous(expand = c(0,0))+
+    scale_x_discrete(expand = c(0,0))+
+    theme(legend.position = "none", 
+         legend.title = element_blank(),
+         panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank())
+
+# Runnning the ggplot again to display the balanced data in the test_set
+ggplot(data = test_set, aes(fill = is_fraud)) +
+    geom_bar(aes(x = is_fraud))+
+    ggtitle("Number of samples in each class", subtitle = "Test Set")+
+    xlab("")+
+    ylab("Samples")+
+    scale_y_continuous(expand = c(0,0))+
+    scale_x_discrete(expand = c(0,0))+
+    theme(legend.position = "none", 
+         legend.title = element_blank(),
+         panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank())
 ```
 
 Now that we have randomly sampled the training and testing data to have equal number of is_fraud cases in each, we can move forward with our modeling. 
