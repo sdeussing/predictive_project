@@ -1,5 +1,5 @@
 ---
-title: "dataset_intro"
+title: "Fraud_Analysis"
 author: "Sarah Deussing, Ryan Steffe, Taylor Hill"
 date: "2024-09-27"
 output: html_document
@@ -9,9 +9,17 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## The Dataset
+# Introduction (5 points)(0.5 page): 
 
-#### Loading Packages
+The problem we hope to understand is that of credit card fraud. Credit cards are swiped across the world and for purchases of different sizes. With our data, we hope to determine the factors that signify a fradulent transaction. To do so, we will be running several different models to "predict" fraud. 
+
+Although our analysis includes several different predictive models, we understand that credit card fraud is not something typically predicted. With our predictive models, we want to understand the elements associated with fradulent transactions (i.e. have strong predictive power for fraud). With these insights, credit card companies, banks, and individual credit card holders can be more aware and able to identify when transactions from a card may be fradulent. For example, if age has a positive relationship with the odds of a fradulent transactions, awareness can be raised to older individuals. In selecting this dataset, we hope to increase our own awareness about the topic.
+
+The inputs to our model are the location of the transaction (city, state), information about the time of the transcation (day, time of day), the "job" associated with the transcation, and the age of the individual cardholder.
+
+# Explanatory Data Analysis 
+
+## Dataset
 ```{r Packages}
 library(tidyr)
 library(tidyverse)
@@ -28,15 +36,21 @@ library(leaflet)
 library(glmnet)
 ```
 
-#### Read in Data
 ```{r Read in data}
 fraud <- read.csv("fraud_data.csv")
 summary(fraud)
 ```
 
+Our 'fraud' dataset includes both categorical and numerical identifiers, in addition to a binary outcome variable 'is_fraud.' We have information about the date/time of the transaction, the amount, job, information about the merchant, and date of birth of the cardholder.
 
-#### Data Cleaning
-There are two columns that contain dates to be converted (trans_date_trans_time and dob). We also want to make an 'age' column from the date of birth.
+To perform our analyses, we have to create several different variables from the initial columns.
+  1. Transaction Date
+  2. Transaction Time
+  3. Age
+  4. Hour of Day
+  5. Time of Day
+  6. Day of Week
+
 ```{r Cleaning}
 # Make date column
 fraud[c('trans_date', 'trans_time')] <- str_split_fixed(fraud$trans_date_trans_time, " ", 2)
@@ -57,29 +71,49 @@ fraud$TimeOfDay <- ((fraud$hours*60)+fraud$minutes)/60
 fraud$DayOfWeek <- wday(fraud$trans_date)
 ```
 
-Clean the response variable
-```{r Clean response var}
+We also need to ensure that our response variable is truly binary. 
+```{r Check response var}
 unique(fraud$is_fraud)
+```
 
-# We see some entries that contain information beyond '1' or '0'.
+We see some entries that contain information beyond '1' or '0'. For those entries, let's eliminate the extra information beyond the binary variable.
+
+```{r Clean response var}
 fraud$is_fraud <- substring(fraud$is_fraud, 1, 1)
 
-# We also want to convert this to numeric
 fraud$is_fraud <- as.factor(fraud$is_fraud)
 ```
 
+Let's understand our dataset by looking at the locations of our entries.
+```{r Fraud Map}
+pallette <- colorFactor(c("blue", "red"), domain = c(0, 1))
+
+leaflet(fraud) %>%
+  addTiles() %>%  
+  addCircles(lng = ~long, lat = ~lat, 
+             color = ~pallette(is_fraud), 
+             radius = 5,  
+             fillOpacity = 0.6, 
+             popup = ~paste("Fraud Status:", is_fraud)) %>%
+  addLegend("bottomright", 
+            pal = pallette, 
+            values = c(0, 1), 
+            title = "Is Fraud", 
+            labels = c("Not Fraud (0)", "Fraud (1)"))
+```
+
+It appears that our dataset is limited to solely the midwest/west coast. Therefore, any conclusions that we may find cannot be generalized beyond these locations.
 
 ## Exploratory Plots
 The response variable is 'is_fraud'. 1 denotes fraud, 0 denotes not fraud.
 
-The five explanatory variables we are looking at are:
+Let's explore some of our variables and their relationship with our outcome variable. We will do so with:
   - Category
   - Amount
   - Job
   - Time
   - Age
 
-To do this, let's look at plots of each variable with our response (is_fraud).
 ```{r Exploratory Plots}
 # 1. Category
 ggplot(fraud, aes(x=category, group = is_fraud, fill = is_fraud)) + geom_bar() +
@@ -121,7 +155,7 @@ ggplot(date_df, aes(x=month, y = month_freq)) + geom_col() +
   labs(title = 'Count of Fraud Occurrences by Month',
        x = 'Month January-December')
 
-#By Time of Day
+# By Time of Day (Hour)
 ggplot(fraud, aes(x=tod, color = is_fraud)) + geom_histogram(fill = "black") +
   theme(axis.text.x = element_text(angle = 90), panel.background = element_rect("black"), panel.grid.minor = element_blank(),
     panel.grid.major = element_blank()) +
@@ -145,29 +179,24 @@ ggplot(fraud, aes(x=age, y=is_fraud)) + geom_boxplot() +
   labs(title = 'Fraud at Different Ages', x = 'Age')
 ```
 
-All variables seem to have a relationship with the response variable. For the purpose of prediction, 'merchant' may have too many variables to use in modeling. Additionally, we can use time of day in our modeling in different forms - hour, period of the day, exact time, etc. We can also use date as either true date or the day of the week.
+1. Category: We see that the counts of fraud are split through several different categories.
+2. Amount: We see that fradulent transactions typically are those with much larger amounts.
+3. Job: Like with category, we see that the counts of fraud are split through several different job titles.
+4. Time
+  - Month: We don't see an easily identifiable trend of fradulent transactions across the months of the year.
+  - Hour: We see a general increase in the number of fradulent transactions later in the day.
+5. Age: We don't see a significant difference in the number of fradulent transactions for different age groups.
 
-We will also visualize location as a potential variable. However, this plot is more exploratory to understand the dataset we are working with.
-```{r Fraud Map}
-pallette <- colorFactor(c("blue", "red"), domain = c(0, 1))
+** explain why those vars were chosen for analysis
+** need to do a plot between two attributes
+** and maybe some summary stats of numerics vars
 
-leaflet(fraud) %>%
-  addTiles() %>%  
-  addCircles(lng = ~long, lat = ~lat, 
-             color = ~pallette(is_fraud), 
-             radius = 5,  
-             fillOpacity = 0.6, 
-             popup = ~paste("Fraud Status:", is_fraud)) %>%
-  addLegend("bottomright", 
-            pal = pallette, 
-            values = c(0, 1), 
-            title = "Is Fraud", 
-            labels = c("Not Fraud (0)", "Fraud (1)"))
-```
 
-It appears that our dataset is limited to solely the midwest/west coast. Therefore, any conclusions that we may find cannot be generalized beyond these locations.
+For the purpose of prediction, 'merchant' may have too many categories to use in our modeling. 
+We have several choices of representing time of day (hour, period, exact time) and date (exact date, day of the week) in our modeling. 
 
-## Modeling/Predicting
+
+# Learning Algorithm Training and Testing
 We will run various types of models with our outcome variable: is_fraud.
 The goal of these models is to understand factors that are representative of a fradulent transcation, so that they can be flagged in the future.
 
@@ -439,3 +468,5 @@ We see an accuracy of 0.98 for our XGBoost model on the test set.
 
 
 ## Time series
+
+# Conclusion
