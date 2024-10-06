@@ -78,7 +78,6 @@ unique(fraud$is_fraud)
 ```
 
 We see some entries that contain information beyond '1' or '0'. For those entries, let's eliminate the extra information beyond the binary variable.
-
 ```{r Clean response var}
 fraud$is_fraud <- substring(fraud$is_fraud, 1, 1)
 
@@ -118,63 +117,86 @@ Let's explore some of our variables and their relationship with our outcome vari
 ```{r Exploratory Plots}
 # 1. Category
 ggplot(fraud, aes(x=category, group = is_fraud, fill = is_fraud)) + geom_bar() +
-  theme(axis.text.x = element_text(angle = 90)) +
-  labs(title = 'Count of Fraud in Transaction Categories', x = 'Category') 
+  theme(axis.text.x = element_text(angle = 90),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+  labs(title = 'Count of Fraud in Transaction Categories', x = 'Category')
 length(unique(fraud$category))
 
 # 2. Amount
 ggplot(fraud, aes(x=amt, y=is_fraud)) + geom_boxplot() +
-  theme(axis.text.x = element_text(angle = 90)) +
-  labs(title = 'Fraud at Different Amounts', x = 'Amount') + 
+  theme(axis.text.x = element_text(angle = 90),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+  labs(title = 'Fraudulent Transactions at Different Amounts', x = 'Amount') + 
   coord_cartesian(xlim = c(0, 1500))
 summary(fraud$amt)
 
 # 3. Job
-job_df <- fraud %>%
+fraud %>%
   filter(is_fraud == 1) %>%
   select(is_fraud, job) %>%
   group_by(job) %>%
   count() %>%
   mutate(freq = freq) %>%
   arrange(desc(freq)) %>%
-  head(10)
-ggplot(job_df, aes(x=reorder(job, -freq), y = freq)) + geom_col() +
-  theme(axis.text.x = element_text(angle = 90)) +
+  head(10) %>%
+  ggplot(., aes(x=reorder(job, -freq), y = freq)) + geom_col() +
+  theme(axis.text.x = element_text(angle = 90),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
   labs(title = 'Count of Fraud by Job', x = 'Job')
 length(unique(fraud$job))
 
 # 4. Time
 # By Month
-date_df <- fraud %>%
+fraud %>%
   filter(is_fraud == 1) %>%
   mutate(month = month(trans_date)) %>%
   select(is_fraud, month) %>%
   group_by(month) %>%
   count() %>%
-  mutate(month_freq = freq)
-
-ggplot(date_df, aes(x=month, y = month_freq)) + geom_col() +
+  mutate(month_freq = freq) %>%
+  ggplot(., aes(x=month, y = month_freq)) + geom_col() +
   theme(axis.text.x=element_blank(),
-        axis.ticks.x=element_blank()) +
+        axis.ticks.x=element_blank(),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
   labs(title = 'Count of Fraud Occurrences by Month',
        x = 'Month January-December')
 
 # By Time of Day (Hour)
 ggplot(fraud, aes(x=TimeOfDay, color = is_fraud)) + geom_histogram() +
-  theme(axis.text.x = element_text(angle = 90)) +
-  labs(title = 'Count of Fraud Occurrences by Time of Day',
+  theme(axis.text.x = element_text(angle = 90),
+        axis.ticks.x=element_blank(),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+  labs(title = 'Count of Fraud Occurrences by Hour',
        x = 'Time of Day', y = 'Count of Fraud')
 
 # By Day of Week
-week_df <- fraud %>% filter(is_fraud == 1) %>%
-  select(DayOfWeek, is_fraud)
-ggplot(week_df, aes(x = DayOfWeek)) + geom_bar() +
-  labs(title = 'Count of Fraud Occurrences throughout the Week',
-       x = 'Day (Sunday - Saturday)', y = 'Count of Fraud')
+fraud %>% filter(is_fraud == 1) %>%
+  select(DayOfWeek, is_fraud) %>%
+  ggplot(., aes(x = DayOfWeek)) + geom_bar() +
+  labs(title = 'Fraud Occurrences Throughout the Week',
+       x = 'Day (Sunday - Saturday)', y = 'Count of Fraud') +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank())
 
 # 5. Age
 ggplot(fraud, aes(x=age, y=is_fraud)) + geom_boxplot() +
-  theme(axis.text.x = element_text(angle = 90)) +
+  theme(axis.text.x = element_text(angle = 90),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
   labs(title = 'Fraud at Different Ages', x = 'Age')
 summary(fraud$age)
 ```
@@ -203,7 +225,9 @@ Because we have such a large range of amounts, let's filter to only amounts less
 ```{r Attribute relationships}
 fraud %>% filter(amt < 250) %>%
   ggplot(aes(x = factor(hours), y = amt)) + geom_boxplot() + 
-  theme_minimal() +
+  theme(panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
   labs(title = 'Amount of Transactions Throughout the Day', x = 'Time of Day (Hour)', y = 'Amount')
 ```
 
@@ -321,6 +345,10 @@ coefficients %>%
 ```
 
 We see 14 variables that are significant at the highest level (p value less than 0.01). We only see one 'job' variable appear in this list, however, we see that amount, hour, and several category variables are significant in our analysis. We see that state and day of the week were not significant in our modeling at this level.
+ - Amount
+ - Hour
+ - Job: science writer
+ - Category: food_dining, gas_transport, grocery_net, grocery_pos, health_fitness, kids_pets, misc_pos, personal_care, shopping_net, shopping_pos, travel
 
 Our model performed well on both cases of fraud within the train set.Let's test our model on the test set.
 ```{r Predict log test}
