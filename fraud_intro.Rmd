@@ -570,6 +570,26 @@ from both methods, and discuss which one performed better.
 
 Let's compare the different models we have used for analyses: (1) logistic regression, (2) lasso binary logistic regression, (3) XGBoost binary model, (4) Time series model.
 
+The logistic regression model 
+
+1: log
+  - balanced accuracy is 0.85
+  - important factors: amount, hour, category
+  - feature selection: none
+  - interpretability: high
+2: lasso
+  - balanced accuracy is .862
+  - important factors: amount
+  - feature selection: lambda penalty
+  - interpretability: moderate
+3: xgboost
+  - accuracy is 0.97
+  - important factors: amount, hour
+  - feature selection: implicit through tree splits
+  - interpretability: low/moderate
+4: time series
+
+
 
 # Discussion & Conclusion
 
