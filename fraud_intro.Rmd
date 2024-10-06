@@ -34,6 +34,7 @@ library(data.table)
 library(plyr)
 library(leaflet)
 library(glmnet)
+library(zoo)
 ```
 
 ```{r Read in data}
@@ -552,4 +553,18 @@ from both methods, and discuss which one performed better.
 
 
 ## Time series
-??
+```{r}
+# Convert the entire column to Date class
+fraud$trans_date <- as.Date(fraud$trans_date)
+
+# Extract year and month
+fraud$year <- format(fraud$trans_date, "%Y")
+fraud$month <- format(fraud$trans_date, "%m")
+
+# arguments start and end are (cycle [=year] number, seasonal period [=month] number) pairs.
+fraud.ts <- ts(fraud$amt, start = c(2019, 1), end = c(2020, 12), freq = 12)
+
+# plot the series using the autoplot function to make use of ggplot
+autoplot(fraud.ts, xlab="Time", ylab="Amount") +
+scale_y_continuous(limits=c(0, 1500))
+```
