@@ -570,29 +570,22 @@ from both methods, and discuss which one performed better.
 
 Let's compare the different models we have used for analyses: (1) logistic regression, (2) lasso binary logistic regression, (3) XGBoost binary model, (4) Time series model.
 
-The logistic regression model 
+1. The logistic regression model had a balanced accuracy of 0.85. With a logistic model, we selected the input variables that we (through exploratory analysis) thought would have strong predictive power. The model fit these variables linearly to the log-odds of our outcome variable. The model revealed that important factors for predicting fraud were amount, hour, and category. Compared to our other models, the results of this logistic regression model were easy to interpret - we could look at the p-values for each predictor variable and store the lowest (most significant) variables.
 
-1: log
-  - balanced accuracy is 0.85
-  - important factors: amount, hour, category
-  - feature selection: none
-  - interpretability: high
-2: lasso
-  - balanced accuracy is .862
-  - important factors: amount
-  - feature selection: lambda penalty
-  - interpretability: moderate
-3: xgboost
-  - accuracy is 0.97
-  - important factors: amount, hour
-  - feature selection: implicit through tree splits
-  - interpretability: low/moderate
-4: time series
+2. The lasso logistic model has a balanced accuracy of 0.86. With this model, we provided many possible predictor variables within the dataset, and the model determined those that had a strong predictive power. It does this feature selection through a lambda penalty factor, which we tuned using cross-validation before running out final lasso model. In this way, a lasso model is able to handle more complex datasets, although it still assumes the log-odds linear relationship that the logistic regression does. This model revealed that amount was the only variable with significant predictive power for our fraud outcome.  
 
+3. The XGBoost model had an accuracy of 0.97. With this model, we provided the same variables as we did for the lasso model, and the model determined those that had a strong predictive power. It does this feature selection through implicit tree splits during the modeling process. As a result, an XGBoost model is able to handle and interpret more complex relationships between the input variables and the outcome. On the other hand, this model is more difficult to interpret (but we were still able to decode and understand the results). 
 
+4. The time series model was not used in a predictive sense, unlike the previous three models. Instead, we were looking at trends throughout the dataset (over time) and analyzing any patterns in seasonality. We found that amount increases throughout the winter season in all the years during which our data was collected.
 
 # Discussion & Conclusion
 
-Discuss the results/findings coming from the model. What were
-the insights gained from the model? Provide a summary of the
-report and the key points from the analysis.
+The goal of our analysis was to identify the variables/key factors that increased the odds of a fradulent transaction. We did so through models that assumed both a linear and non-linear relationship with the log-odds of our response. We ran models in which we chose the input variables and those in which the model had feature selection internally. All models produced similar results and led us to key insights about credit card fraud.
+
+We began this modeling process by looking at several of our variables and their relationship with our response variable - is_fraud. This was a binary variable denoting whether the transactions was fradulent. Once we understood our predictors, we selected those with the strongest relationships to fraud as our inputs to a binary logistic regression model. To verify the strength of our chosen predictors, we then ran a lasso logistic model, where the model determined important features. Finally, we ran an XGBoost model to analyze whether our predictors had a non-linear relationship with our outcome variable. 
+
+Our final model - a time series model - was constructed for post-modeling analysis, as opposed to the model having any predictive power. We wanted to understand the change in 'amount' over time.
+
+Across all our models, we found that amount is the strongest predictor for a fradulent transaction, and it has a positive relationship with our outcome variable. The next strongest predictor across all three prediction models was hour of the day, with times later in the day increasing the log-odds of a transaction being fradulent. Both of these conclusions were supported by our linear regression, lasso, and XGBoost models. 
+
+From the results of these models, we can make several practical conclusions. 'Predicting' a fradulent transactions is not a practical application; instead, we performed this analysis to provide awareness about flagging these types of transactions. Key flags are: a transaction with a high amount and a transaction later in the day. During these periods, individuals should be more wary about their credit card use and ensure that they understand their credit card statements and purchases. Further analysis on the 'amount' variable revealed that, generally, transaction amounts increase during the holiday season (October to February). During these times, credit card companies and individual cardholders should regularly check and understand their statements. As credit card holders ourselves, we will be applying these practical insights into our own lives.
