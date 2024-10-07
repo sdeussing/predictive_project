@@ -1,5 +1,5 @@
 ---
-title: "Fraud_Analysis"
+title: "An Analysis of Credit Card Fraud in the Western US"
 author: "Sarah Deussing, Ryan Steffe, Taylor Hill"
 date: "2024-09-27"
 output: html_document
@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Introduction (5 points)(0.5 page): 
+# Introduction 
 
 The problem we hope to understand is that of credit card fraud. Credit cards are swiped across the world and for purchases of different sizes. With our data, we hope to determine the factors that signify a fradulent transaction. To do so, we will be running several different models to "predict" fraud. 
 
@@ -17,7 +17,7 @@ Although our analysis includes several different predictive models, we understan
 
 The inputs to our model are the location of the transaction (city, state), information about the time of the transcation (day, time of day), the "job" associated with the transcation, and the age of the individual cardholder.
 
-# Explanatory Data Analysis 
+# Exploratory Data Analysis 
 
 ## Dataset
 ```{r Packages}
@@ -244,7 +244,7 @@ In our exploratory analysis, we see a relationship the response variable and cat
 We will run various types of models with our outcome variable: is_fraud.
 The goal of these models is to understand factors that are representative of a fradulent transcation, so that they can be flagged in the future.
 
-#### Balance the dataset / Split into training + testing sets
+## Balance the dataset / Split into training + testing sets
 ```{r Balance count}
 count(fraud$is_fraud)
 ```
@@ -296,7 +296,7 @@ nrow(copies)
 Now that we have randomly sampled the training and testing data to have equal number of is_fraud cases in each, we can move forward with our modeling. 
 
 
-#### Logistic Regression Model
+## Logistic Regression Model
 Because we have a binary response variable, we can run logistic regression. 
 A logistic regression model assumes a linear relationship between the log-odds of the outcome variable and the predictors. We are beginning with this model because it is relatively simple to understand how much/well each predictor contributes to the model. We will run this model with the 'glm' function (generalized linear model).
 
@@ -362,7 +362,7 @@ For our test set, we see a balanced accuracy of 0.85, which is only 1% lower tha
 
 Because our model performed generally the same on the test set as the train set, we are confident in our model's performance to predict fraud across other datasets/instances.
 
-#### Lasso Logistic Regression Model
+## Lasso Logistic Regression Model
 
 In our previous model (glm), we chose our predictors based on exploratory analysis of their relationship with our outcome variable. We want to understand if we selected the best predictors for our modeling. In our above analysis, we saw that the values of 'job' did not appear to be strong predictors; we would like to know if these values are having any significant predicting power in our modeling. To do so, we can run a lasso logistic regression model.
 
@@ -470,7 +470,7 @@ lasso_coefs %>%
 
 We see that, according to the lasso model, only amount is a significant predictor in our modeling, and that all other coefficients have been reduced to 0. This reveals that amount is the most significant predictor as to whether a transactions will be fradulent (assuming a linear relationship between amount and the log-odds of fraud).
 
-#### XGBoost Model
+## XGBoost Model
 With our logistic regression models above (regular glm and lasso glm), we assumed a linear relationship between our predictors and the log-odds of our outcome variable (is_fraud). An XGBoost model can handle non-linear relationships between our predictors and log-odds outcome. 
 
 We will run an XGBoost model to analyze more complex, non-linear relationships in our data.
@@ -573,7 +573,7 @@ importance_matrix %>%
 
 We see that amount has the highest gain, cover, and frequency. This supports the conclusions from our Lasso model - amount is the most significant predictor of whether a transaction is fradulent. The hour of the day has the second highest gain, cover, and frequency. Like our exploratory plot showed, hours later in the day are associated with more (and thus a higher likelihood) of a fradulent transaction.
 
-#### Time series
+## Time series
 Because amount was a strong predictor, let's look at the way it varies throughout the dataset. We understand from our previous analyses that a higher amount correspond to a higher odds that the transaction is fradulent.
 
 ```{r Time Series}
@@ -592,7 +592,7 @@ Generally, we see local maximums at the beginning and end of each year. This mea
  
 Because amount is a strong predictor of a fradulent transaction, we expect more fradulent transactions during these months. As a result, individuals should be more in-tune with their credit card statements and wary of their credit card usage during these months.
 
-#### Model Comparison
+## Model Comparison
 In the subsequent subsection, compare your results
 from both methods, and discuss which one performed better.
 
@@ -613,6 +613,8 @@ The goal of our analysis was to identify the variables/key factors that increase
 We began this modeling process by looking at several of our variables and their relationship with our response variable - is_fraud. This was a binary variable denoting whether the transactions was fradulent. Once we understood our predictors, we selected those with the strongest relationships to fraud as our inputs to a binary logistic regression model. To verify the strength of our chosen predictors, we then ran a lasso logistic model, where the model determined important features. Finally, we ran an XGBoost model to analyze whether our predictors had a non-linear relationship with our outcome variable. 
 
 Our final model - a time series model - was constructed for post-modeling analysis, as opposed to the model having any predictive power. We wanted to understand the change in 'amount' over time.
+
+In reflection of our work, and if provided with more time on the project, we would look further into the 'category' variable. There were 163 different categories; therefore, none were very prevalent predictors. Instead, we would want to find about 6 category groups using k-means clustering, and then use these categories in prediction models. We would also do the same with 'job.'
 
 Across all our models, we found that amount is the strongest predictor for a fradulent transaction, and it has a positive relationship with our outcome variable. The next strongest predictor across all three prediction models was hour of the day, with times later in the day increasing the log-odds of a transaction being fradulent. Both of these conclusions were supported by our linear regression, lasso, and XGBoost models. 
 
