@@ -1,0 +1,623 @@
+---
+title: "An Analysis of Credit Card Fraud in the Western US"
+author: "Sarah Deussing, Ryan Steffe, Taylor Hill"
+date: "2024-10-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction 
+
+The problem we hope to understand is that of credit card fraud. Credit cards are swiped across the world and for purchases of different sizes. With our data, we hope to determine the factors that signify a fradulent transaction. To do so, we will be running several different models to "predict" fraud. 
+
+Although our analysis includes several different predictive models, we understand that credit card fraud is not something typically predicted. With our predictive models, we want to understand the elements associated with fradulent transactions (i.e. have strong predictive power for fraud). With these insights, credit card companies, banks, and individual credit card holders can be more aware and able to identify when transactions from a card may be fradulent. For example, if age has a positive relationship with the odds of a fradulent transactions, awareness can be raised to older individuals. In selecting this dataset, we hope to increase our own awareness about the topic.
+
+The inputs to our model are the location of the transaction (city, state), information about the time of the transcation (day, time of day), the "job" associated with the transcation, and the age of the individual cardholder.
+
+# Exploratory Data Analysis 
+
+## Dataset
+```{r Packages, include=FALSE}
+library(tidyr)
+library(tidyverse)
+library(dplyr)
+library(caret)
+library(ggplot2)
+library(readr)
+library(xgboost)
+library(stringr)
+library(lubridate)
+library(data.table)
+library(plyr)
+library(leaflet)
+library(glmnet)
+library(zoo)
+```
+
+```{r Read in data}
+fraud <- read.csv("fraud_data.csv")
+summary(fraud)
+```
+
+Our 'fraud' dataset includes both categorical and numerical identifiers, in addition to a binary outcome variable 'is_fraud.' We have information about the date/time of the transaction, the amount, job, information about the merchant, and date of birth of the cardholder.
+
+To perform our analyses, we have to create several different variables from the initial columns.
+  1. Transaction Date
+  2. Transaction Time
+  3. Age
+  4. Hour of Day
+  5. Time of Day
+  6. Day of Week
+
+```{r Cleaning}
+# Make date column
+fraud[c('trans_date', 'trans_time')] <- str_split_fixed(fraud$trans_date_trans_time, " ", 2)
+fraud$trans_date <- as.Date(fraud$trans_date, "%d-%m-%Y")
+
+# Make age column
+fraud$dob <- as.Date(fraud$dob, "%d-%m-%Y")
+fraud$age <- floor(interval(fraud$dob, now()) / years(1))
+
+# Make time column
+fraud$time2 <- hm(fraud$trans_time)
+fraud <- separate(fraud, trans_time, into = c("hours", "minutes"), sep = ":")
+fraud$hours <- as.numeric(fraud$hours)
+fraud$minutes <- as.numeric(fraud$minutes)
+fraud$total_seconds <- (fraud$hours * 3600) + (fraud$minutes * 60) 
+fraud$TimeOfDay <- ((fraud$hours*60)+fraud$minutes)/60
+
+fraud$DayOfWeek <- wday(fraud$trans_date)
+```
+
+We also need to ensure that our response variable is truly binary. 
+```{r Check response var}
+unique(fraud$is_fraud)
+```
+
+We see some entries that contain information beyond '1' or '0'. For those entries, let's eliminate the extra information beyond the binary variable.
+```{r Clean response var}
+fraud$is_fraud <- substring(fraud$is_fraud, 1, 1)
+
+fraud$is_fraud <- as.factor(fraud$is_fraud)
+```
+
+Let's understand our dataset by looking at the locations of our entries.
+```{r Fraud Map}
+pallette <- colorFactor(c("blue", "red"), domain = c(0, 1))
+
+leaflet(fraud) %>%
+  addTiles() %>%  
+  addCircles(lng = ~long, lat = ~lat, 
+             color = ~pallette(is_fraud), 
+             radius = 5,  
+             fillOpacity = 0.6, 
+             popup = ~paste("Fraud Status:", is_fraud)) %>%
+  addLegend("bottomright", 
+            pal = pallette, 
+            values = c(0, 1), 
+            title = "Is Fraud", 
+            labels = c("Not Fraud (0)", "Fraud (1)"))
+```
+
+It appears that our dataset is limited to solely the midwest/west coast. Therefore, any conclusions that we may find cannot be generalized beyond these locations.
+
+## Exploratory Plots
+The response variable is 'is_fraud'. 1 denotes fraud, 0 denotes not fraud.
+
+Let's explore some of our variables and their relationship with our outcome variable. We will do so with:
+  - Category
+  - Amount
+  - Job
+  - Time
+  - Age
+
+```{r Exploratory Plots}
+# 1. Category
+ggplot(fraud, aes(x=category, group = is_fraud, fill = is_fraud)) + geom_bar() +
+  theme(axis.text.x = element_text(angle = 90),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+  labs(title = 'Count of Fraud in Transaction Categories', x = 'Category')
+length(unique(fraud$category))
+
+# 2. Amount
+ggplot(fraud, aes(x=amt, y=is_fraud)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+  labs(title = 'Fraudulent Transactions at Different Amounts', x = 'Amount') + 
+  coord_cartesian(xlim = c(0, 1500))
+summary(fraud$amt)
+
+# 3. Job
+fraud %>%
+  filter(is_fraud == 1) %>%
+  select(is_fraud, job) %>%
+  group_by(job) %>%
+  count() %>%
+  mutate(freq = freq) %>%
+  arrange(desc(freq)) %>%
+  head(10) %>%
+  ggplot(., aes(x=reorder(job, -freq), y = freq)) + geom_col() +
+  theme(axis.text.x = element_text(angle = 90),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+  labs(title = 'Count of Fraud by Job', x = 'Job')
+length(unique(fraud$job))
+
+# 4. Time
+# By Month
+fraud %>%
+  filter(is_fraud == 1) %>%
+  mutate(month = month(trans_date)) %>%
+  select(is_fraud, month) %>%
+  group_by(month) %>%
+  count() %>%
+  mutate(month_freq = freq) %>%
+  ggplot(., aes(x=month, y = month_freq)) + geom_col() +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+  labs(title = 'Count of Fraud Occurrences by Month',
+       x = 'Month January-December')
+
+# By Time of Day (Hour)
+ggplot(fraud, aes(x=TimeOfDay, color = is_fraud)) + geom_histogram() +
+  theme(axis.text.x = element_text(angle = 90),
+        axis.ticks.x=element_blank(),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+  labs(title = 'Count of Fraud Occurrences by Hour',
+       x = 'Time of Day', y = 'Count of Fraud')
+
+# By Day of Week
+fraud %>% filter(is_fraud == 1) %>%
+  select(DayOfWeek, is_fraud) %>%
+  ggplot(., aes(x = DayOfWeek)) + geom_bar() +
+  labs(title = 'Fraud Occurrences Throughout the Week',
+       x = 'Day (Sunday - Saturday)', y = 'Count of Fraud') +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank())
+
+# 5. Age
+ggplot(fraud, aes(x=age, y=is_fraud)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90),
+        panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+  labs(title = 'Fraud at Different Ages', x = 'Age')
+summary(fraud$age)
+```
+
+1. Category:
+  - We see that the counts of fraud are split through several different categories.
+  - We have 14 total distinct categories in our dataset.
+2. Amount:
+  - We see that fradulent transactions typically are those with much larger amounts. 
+  - There is a wide range of amounts (`$`1.00 - `$`3261.47). The median and mean are less than 150.00, meaning that most of the amounts in our data are concentrated within these lower values.
+3. Job:
+  - Like with category, we see that the counts of fraud are split through several different job titles.
+  - We have 163 total distinct jobs in our dataset.
+4. Time
+  - Month: We don't see an easily identifiable trend of fradulent transactions across the months of the year.
+  - Hour: We see a general increase in the number of fradulent transactions later in the day.
+  - Day of Week: We see a higher number of fradulent transactions at the beginning and the end of the week.
+5. Age:
+  - We don't see a significant difference in the number of fradulent transactions for different age groups.
+  - Our dataset is limited to only adults, with an age range between 23 and 97. The median and mean for age are both around 50 years old, meaning that our dataset is not skewed in terms of ages.
+
+We see that amount, hour of the day, job, and category have a relationship with our outcome variable. Let's look at some of the relationships between these attributes.
+
+Is there a relationship between the transaction amount and the hour of the day it occurs?
+Because we have such a large range of amounts, let's filter to only amounts less than `$`250 (where most entries are concentrated) so we can better visualize the relationship.
+```{r Attribute relationships}
+fraud %>% filter(amt < 250) %>%
+  ggplot(aes(x = TimeOfDay, y = amt)) + geom_point() + geom_smooth() + 
+  theme(panel.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+  labs(title = 'Amount of Transactions Throughout the Day', x = 'Time of Day (Hour)', y = 'Amount')
+```
+
+We see a general decrease in the amount of transactions throughout the day; however, this is not a significant enough relationship to warrant an interaction term between the two variables in any future modeling. 
+
+
+For the purpose of prediction, 'merchant' may have too many categories to use in our modeling. 
+We have several choices of representing time of day (hour, period, exact time) and date (exact date, day of the week) in our modeling. 
+
+In our exploratory analysis, we see a relationship the response variable and category, job, hour, day of week, and amount. These variables will be important for later analyses.
+
+
+# Learning Algorithm Training and Testing
+We will run various types of models with our outcome variable: is_fraud.
+The goal of these models is to understand factors that are representative of a fradulent transcation, so that they can be flagged in the future.
+
+## Balance the dataset / Split into training + testing sets
+```{r Balance count}
+count(fraud$is_fraud)
+```
+
+There are 12,601 cases of no-fraud and 1,845 cases of fraud in the dataset.
+For our modeling, we will balance our dataset when we create the train and test sets. To do so, we will randomly sample 1,500 entries from each class to make the train set and 300 entries (of the remaining entries) from each class to make the test set.
+```{r Make train}
+fraud$id <- seq_len(nrow(fraud))
+set.seed(1234567)
+
+train1 <- fraud %>% 
+  filter(is_fraud == 1) %>%
+  sample_n(1500)
+
+train0 <- fraud %>% 
+  filter(is_fraud == 0) %>%
+  sample_n(1500)
+
+train_set <- bind_rows(train1, train0)
+
+dim(train_set)
+count(train_set$is_fraud)
+```
+
+```{r Make test}
+train_ids <- train_set$id
+remaining <- fraud %>% 
+  filter(!(id %in% train_ids))
+
+test1 <- remaining %>% 
+  filter(is_fraud == 1) %>%
+  sample_n(300)
+
+test0 <- remaining %>% 
+  filter(is_fraud == 0) %>%
+  sample_n(300)
+
+test_set <- bind_rows(test1, test0)
+
+dim(test_set)
+count(test_set$is_fraud)
+
+# check identical rows
+copies <- train_set %>%
+  inner_join(test_set, by = names(train_set))
+nrow(copies)
+```
+
+Now that we have randomly sampled the training and testing data to have equal number of is_fraud cases in each, we can move forward with our modeling. 
+
+
+## Logistic Regression Model
+Because we have a binary response variable, we can run logistic regression. 
+A logistic regression model assumes a linear relationship between the log-odds of the outcome variable and the predictors. We are beginning with this model because it is relatively simple to understand how much/well each predictor contributes to the model. We will run this model with the 'glm' function (generalized linear model).
+
+First, let's prepare our train and test sets for modeling.
+
+Our categorical predictors are: merchant, category, city, state, job, DayOfWeek.
+Our numerical predictors are:  amt, TimeOfDay, age.
+
+To run a logistic regression model, we need to convert these categorical predictors to factors.
+```{r Modify train/test sets for models}
+train_set <- train_set %>%
+  mutate(merchant = as.factor(merchant),
+         category = as.factor(category),
+         city = as.factor(city),
+         state = as.factor(state),
+         job = as.factor(job),
+         DayOfWeek = as.factor(DayOfWeek))
+
+test_set <- test_set %>%
+  mutate(merchant = as.factor(merchant),
+         category = as.factor(category),
+         city = as.factor(city),
+         state = as.factor(state),
+         job = as.factor(job),
+         DayOfWeek = as.factor(DayOfWeek))
+```
+
+In our exploratory analyses, we see a relationship between is_fraud and: category, job, hour, day of week, and amount. Let's use these in our model, alongside state.
+```{r Log Model}
+log_model <- glm(is_fraud ~ category + state + job + DayOfWeek + amt + hours,
+                 data = train_set, family = binomial)
+predicted_probs <- predict(log_model, type = "response")
+predicted_classes <- ifelse(predicted_probs > 0.5, 1, 0)
+#table(predicted = predicted_classes, actual = fraud2$is_fraud)
+confusionMatrix(as.factor(predicted_classes), as.factor(train_set$is_fraud))
+```
+
+Our model's balanced accuracy is 0.8667, meaning that our chosen predictors make a strong model. We see a sensitivity score of 0.9033, meaning that our model correctly identified 90% of no-fraud (0) cases. We see a similar specificity value of 0.8300. This means that our model correctly identified 83% of the fraud cases in the train set. 
+
+Let's look at the predictors that were most significant.
+```{r Log predictors}
+coefficients <- as.data.frame(summary(log_model)$coefficients)
+colnames(coefficients) <- c("Estimate", "Std.Error", "z.value", "p.value")
+coefficients %>%
+  filter(p.value < 0.001)
+```
+
+We see 14 variables that are significant at the highest level (p value less than 0.01). We only see one 'job' variable appear in this list, however, we see that amount, hour, and several category variables are significant in our analysis. We see that state and day of the week were not significant in our modeling at this level.
+ - Amount
+ - Hour
+ - Job: science writer
+ - Category: food_dining, gas_transport, grocery_net, grocery_pos, health_fitness, kids_pets, misc_pos, personal_care, shopping_net, shopping_pos, travel
+
+Our model performed well on both cases of fraud within the train set.Let's test our model on the test set.
+```{r Predict log test}
+predicted_probs_test <- predict(log_model, type = "response", newdata = test_set)
+predicted_classes_test <- ifelse(predicted_probs_test > 0.5, 1, 0)
+#table(predicted = predicted_classes, actual = fraud2$is_fraud)
+confusionMatrix(as.factor(predicted_classes_test), as.factor(test_set$is_fraud))
+```
+
+For our test set, we see a balanced accuracy of 0.85, which is only 1% lower than that of our train set. Our sensitivity value is 0.8833, meaning that our model correctly identified 88% of the no-fraud cases. Our specificity value is only slightly lower; our model correctly identified 82% of the fraud cases in the test set.
+
+Because our model performed generally the same on the test set as the train set, we are confident in our model's performance to predict fraud across other datasets/instances.
+
+## Lasso Logistic Regression Model
+
+In our previous model (glm), we chose our predictors based on exploratory analysis of their relationship with our outcome variable. We want to understand if we selected the best predictors for our modeling. In our above analysis, we saw that the values of 'job' did not appear to be strong predictors; we would like to know if these values are having any significant predicting power in our modeling. To do so, we can run a lasso logistic regression model.
+
+Unlike in our previous model, a lasso model will automatically select the best predictors for modeling. 
+```{r Make x/y training sets}
+train_set2 <- train_set %>%
+  select(category, state, job, DayOfWeek, amt, TimeOfDay, age, hours, is_fraud) %>%
+  mutate(is_fraud = as.factor(is_fraud))
+
+# Scale numerical data
+numerical_vars <- train_set2 %>% select(amt, age, hours, TimeOfDay)
+categorical_vars <- train_set2 %>% select(category, state, job, DayOfWeek, is_fraud)
+scaled_numerical <- scale(numerical_vars)
+scaled_train_set <- cbind(as.data.frame(scaled_numerical), categorical_vars)
+
+# Make 'dummy variables' from categorical predictors
+dummy_data <- model.matrix(~ . - is_fraud, data = scaled_train_set)
+dummy_data <- dummy_data[, -1]
+
+#x_train <- as.matrix(train_set2[, -which(names(train_set2) == "is_fraud")])
+x_train <- as.matrix(dummy_data)
+y_train <- as.numeric(scaled_train_set$is_fraud) - 1
+```
+
+A lasso model accepts a 'lambda' value as a parameter. We can find the best lambda through running cross-validated models with different lambda values. Lambda penalizes factors based on the magnitude of their coefficients. Adding this lambda value makes it so that some variables have a coefficient of 0, meaning that they are not essential to modeling. The lambda value determines this penalty.
+```{r Find the best lambda}
+lambda_seq <- seq(from = 0.1, to = 10, by = 0.1)
+cv_model <- cv.glmnet(x_train, y_train, alpha = 1, lambda = lambda_seq, family = "binomial")
+
+best_lambda <- cv_model$lambda.1se
+```
+
+Now that we have the mest lambda, we can predict on our training data.
+```{r Predict on train data}
+lasso_model <- glmnet(x_train, y_train, alpha = 1, lambda = (best_lambda), family = "binomial")
+prediction <- predict(lasso_model, x_train, type="response")
+
+prediction <- ifelse(prediction > 0.48, 1, 0)
+
+xtab <- table(prediction, y_train)
+result<-confusionMatrix(xtab)
+result$overall[['Accuracy']]
+```
+
+We see an accuracy of 0.856 with our Lasso model. Let's use this model to predict on our test set.
+```{r Lasso Predict on test data}
+test_set2 <- test_set %>%
+  select(category, state, job, DayOfWeek, amt, TimeOfDay, age, hours, is_fraud) %>%
+  mutate(is_fraud = as.factor(is_fraud))
+
+# Scale numerical data
+numerical_vars_test <- test_set2 %>% select(amt, age, hours, TimeOfDay)
+categorical_vars_test <- test_set2 %>% select(category, state, job, DayOfWeek, is_fraud)
+scaled_numerical_test <- scale(numerical_vars_test)
+scaled_test_set <- cbind(as.data.frame(scaled_numerical_test), categorical_vars_test)
+
+# Make 'dummy variables' from categorical predictors
+dummy_data_test <- model.matrix(~ . - is_fraud, data = scaled_test_set)
+dummy_data_test <- dummy_data_test[, -1]
+
+#x_train <- as.matrix(train_set2[, -which(names(train_set2) == "is_fraud")])
+x_test <- as.matrix(dummy_data_test)
+y_test <- as.numeric(scaled_test_set$is_fraud) - 1
+```
+
+In order to run our lasso model, we have to ensure that the total dimensions/levels between the training and test sets are the same.
+```{r Setdiff}
+missing <- setdiff(colnames(dummy_data), colnames(dummy_data_test))
+missing
+```
+
+We see a difference in 9 jobs in x_train that are not in x_test. In order to make the dimensions the same, we'll add these jobs into test_set with a value of 0.
+```{r}
+for (col in missing) {
+  new_cols <- as.data.frame(matrix(0, nrow = nrow(dummy_data_test), ncol = length(missing)))
+  colnames(new_cols) <- missing
+  dummy_data_test <- cbind(dummy_data_test, new_cols) 
+}
+
+x_test_aligned <- dummy_data_test[, colnames(dummy_data), drop = FALSE]
+dim(x_train)
+dim(x_test_aligned)
+```
+
+Now that both sets have the same number of dimensions (196), we can predict on our new test set.
+```{r Predict on test data}
+prediction_test <- predict(lasso_model, newx = as.matrix(x_test_aligned), type="response")
+
+prediction_test <- ifelse(prediction_test > 0.48, 1, 0)
+
+xtab <- table(prediction_test, y_test)
+result<-confusionMatrix(xtab)
+result$overall[['Accuracy']]
+```
+
+We see an accuracy of 86.2% on our test set, which is equal to that of our train set. Because the model is optimized on the train set, having a similar accuracy for our test set predictions validates our accuracy. This means that our lasso model has learned the patterns of our data, rather than just overfitting to only the train data.
+
+Let's look at the predictors that the lasso model determined were significant.
+```{r}
+lasso_coefs <- as.data.frame(as.matrix(coef(lasso_model, s = best_lambda)))
+
+lasso_coefs %>%
+  filter(s1 != 0)
+```
+
+We see that, according to the lasso model, only amount is a significant predictor in our modeling, and that all other coefficients have been reduced to 0. This reveals that amount is the most significant predictor as to whether a transactions will be fradulent (assuming a linear relationship between amount and the log-odds of fraud).
+
+## XGBoost Model
+With our logistic regression models above (regular glm and lasso glm), we assumed a linear relationship between our predictors and the log-odds of our outcome variable (is_fraud). An XGBoost model can handle non-linear relationships between our predictors and log-odds outcome. 
+
+We will run an XGBoost model to analyze more complex, non-linear relationships in our data.
+
+To select our variables on which to train the model, we can use our results from previous modeling. We found that several values of category were significant predictors in our logistic regression model, as were amount and hours. We saw that one value of job was significant at the highest level, so job will be included as well.
+```{r Make xgboost train}
+train_set3 <- train_set %>%
+  mutate_if(is.character, as.factor) %>%
+  select(category, job, amt, hours, is_fraud)
+vars <- model.matrix(~ . - is_fraud, data = train_set3)
+train_set3$is_fraud <- as.numeric(as.character(train_set3$is_fraud))
+# [, -which(names(train_set3) == "is_fraud")]
+dtrain <- xgb.DMatrix(data = as.matrix(vars),
+                      label = train_set3$is_fraud)
+```
+
+To find the optimal number of iterations, we will use a cross-validation xgboost model. In this model, we will run a total of 1,000 rounds, but stop after 50 rounds where the model does not improve its learning.
+```{r Run xgboost cv, eval = FALSE}
+bst_cv <- xgb.cv(data = dtrain, 
+              nfold = 5,
+               eta = 0.1, 
+               nrounds = 1000, 
+               early_stopping_rounds = 50, 
+               verbose = 1, 
+               nthread = 1, 
+               print_every_n = 20, 
+               objective = "binary:logistic",
+               eval_metric = "auc",
+               eval_metric = "error")
+```
+
+The best iteration is 96 rounds.
+Let's run our model with 96 rounds.
+```{r xgboost model}
+bst_model <- xgboost(data = dtrain,
+                     eta = 0.1,
+               nrounds = 96, 
+               verbose = 1, 
+                print_every_n = 20, 
+               objective = "binary:logistic", 
+               eval_metric = "auc",
+               eval_metric = "error")
+```
+
+Now, let's predict on our train data.
+```{r Predict on train xgboost}
+prediction_bst <- predict(bst_model, as.matrix(vars), type="response")
+prediction_bst <- ifelse(prediction_bst > 0.5, 1, 0)
+
+xtab <- table(prediction_bst, train_set3$is_fraud)
+result<-confusionMatrix(xtab)
+result$overall[['Accuracy']]
+```
+
+We see an accuracy of 98.6%, which implies that our model may be overfitting to our train set. Let's test this out on the test set.
+```{r XGBoost predict on test}
+test_set3 <- test_set %>%
+  mutate_if(is.character, as.factor) %>%
+  select(category, job, amt, hours, is_fraud)
+vars_test <- model.matrix(~ . - is_fraud, data = test_set3)
+test_set3$is_fraud <- as.numeric(as.character(test_set3$is_fraud))
+```
+
+We see the same difference in jobs in vars that are not in vars_test (as we did in the Lasso model). In order to make the dimensions the same, we'll add these jobs into test_set with a value of 0, in the same way we did in the lasso model.
+```{r Impute missing for xgboost}
+missing <- setdiff(colnames(vars), colnames(vars_test))
+for (col in missing) {
+  new_cols <- as.data.frame(matrix(0, nrow = nrow(vars_test), ncol = length(missing)))
+  colnames(new_cols) <- missing
+  vars_test <- cbind(vars_test, new_cols) 
+}
+
+vars_test_aligned <- vars_test[, colnames(vars), drop = FALSE]
+```
+
+```{r Predict on test set xgboost}
+prediction_bst <- predict(bst_model, newdata = as.matrix(vars_test_aligned))
+prediction_bst <- ifelse(prediction_bst > 0.6, 1, 0)
+
+xtab <- table(prediction_bst, test_set3$is_fraud)
+result<-confusionMatrix(xtab)
+result$overall[['Accuracy']]
+```
+
+We see an accuracy of 0.97 for our XGBoost model on the test set. The slight decrease in accuracy means that our model might not be overfitting to the data, but this is still a possibility with such high accuracy.
+
+Let's look at the variables that were significant in prediction.
+In XGBoost, we have three attributes for each predictor: gain, cover, and frequency.
+  - Gain: The accuracy improvement that the predictor provides when splitting the data throughout modeling.
+  - Cover: The number/proportion of samples within the predictor that contribute to splits.
+  - Frequency: The total number of times the predictor is selected when making splits.
+  
+We will look at predictors that have a high value for all three categories.
+```{r XGBoost feature importance}
+importance_matrix <- xgb.importance(feature_names = colnames(vars_test_aligned), model = bst_model)
+
+importance_matrix %>%
+  arrange(desc(Gain))
+
+xgb.plot.importance(importance_matrix, top_n = 7)
+```
+
+We see that amount has the highest gain, cover, and frequency. This supports the conclusions from our Lasso model - amount is the most significant predictor of whether a transaction is fradulent. The hour of the day has the second highest gain, cover, and frequency. Like our exploratory plot showed, hours later in the day are associated with more (and thus a higher likelihood) of a fradulent transaction. We also see some categories within our top 7 predictors in terms of predictive importance; however, these have very little predictive power overall (significantly less than amount).
+
+## Time series
+Because amount was a strong predictor, let's look at the way it varies throughout the dataset. We understand from our previous analyses that a higher amount correspond to a higher odds that the transaction is fradulent.
+
+```{r Time Series}
+library(forecast)
+fraud$year <- format(fraud$trans_date, "%Y")
+fraud$month <- format(fraud$trans_date, "%m")
+
+# arguments start and end are (cycle [=year] number, seasonal period [=month] number) pairs.
+fraud.ts <- ts(fraud$amt, start = c(2019, 1), end = c(2020, 12), freq = 12)
+
+autoplot(fraud.ts, xlab="Time", ylab="Amount") +
+  scale_y_continuous(limits=c(0, 1500))
+```
+
+Generally, we see local maximums at the beginning and end of each year. This means that amounts are typically higher in the last and first few months (October - February). This time series model makes logical sense. This period encompasses the holiday season, where spending is typically higher as the result of gift-buying.
+ 
+Because amount is a strong predictor of a fradulent transaction, we expect more fradulent transactions during these months. As a result, individuals should be more in-tune with their credit card statements and wary of their credit card usage during these months.
+
+## Model Comparison
+In the subsequent subsection, compare your results
+from both methods, and discuss which one performed better.
+
+Let's compare the different models we have used for analyses: (1) logistic regression, (2) lasso binary logistic regression, (3) XGBoost binary model, (4) Time series model.
+
+1. The logistic regression model had a balanced accuracy of 0.85. With a logistic model, we selected the input variables that we (through exploratory analysis) thought would have strong predictive power. The model fit these variables linearly to the log-odds of our outcome variable. The model revealed that important factors for predicting fraud were amount, hour, and category. Compared to our other models, the results of this logistic regression model were easy to interpret - we could look at the p-values for each predictor variable and store the lowest (most significant) variables.
+
+2. The lasso logistic model has a balanced accuracy of 0.86. With this model, we provided many possible predictor variables within the dataset, and the model determined those that had a strong predictive power. It does this feature selection through a lambda penalty factor, which we tuned using cross-validation before running out final lasso model. In this way, a lasso model is able to handle more complex datasets, although it still assumes the log-odds linear relationship that the logistic regression does. This model revealed that amount was the only variable with significant predictive power for our fraud outcome.  
+
+3. The XGBoost model had an accuracy of 0.97. With this model, we provided the same variables as we did for the lasso model, and the model determined those that had a strong predictive power. It does this feature selection through implicit tree splits during the modeling process. As a result, an XGBoost model is able to handle and interpret more complex relationships between the input variables and the outcome. On the other hand, this model is more difficult to interpret (but we were still able to decode and understand the results). 
+
+4. The time series model was not used in a predictive sense, unlike the previous three models. Instead, we were looking at trends throughout the dataset (over time) and analyzing any patterns in seasonality. We found that amount increases throughout the winter season in all the years during which our data was collected.
+
+# Discussion & Conclusion
+
+The goal of our analysis was to identify the variables/key factors that increased the odds of a fradulent transaction. We did so through models that assumed both a linear and non-linear relationship with the log-odds of our response. We ran models in which we chose the input variables and those in which the model had feature selection internally. All models produced similar results and led us to key insights about credit card fraud.
+
+We began this modeling process by looking at several of our variables and their relationship with our response variable - is_fraud. This was a binary variable denoting whether the transactions was fradulent. Once we understood our predictors, we selected those with the strongest relationships to fraud as our inputs to a binary logistic regression model. To verify the strength of our chosen predictors, we then ran a lasso logistic model, where the model determined important features. Finally, we ran an XGBoost model to analyze whether our predictors had a non-linear relationship with our outcome variable. 
+
+Our final model - a time series model - was constructed for post-modeling analysis, as opposed to the model having any predictive power. We wanted to understand the change in 'amount' over time.
+
+In reflection of our work, and if provided with more time on the project, we would look further into the 'category' variable. There were 14 different categories; therefore, none were very prevalent predictors. Instead, we would want to find about 3 category groups using k-means clustering, and then use these categories in prediction models. We would also do the same with 'job', as there were 163 total jobs.
+
+Across all our models, we found that amount is the strongest predictor for a fradulent transaction, and it has a positive relationship with our outcome variable. The next strongest predictor across all three prediction models was hour of the day, with times later in the day increasing the log-odds of a transaction being fradulent. Both of these conclusions were supported by our linear regression, lasso, and XGBoost models. 
+
+From the results of these models, we can make several practical conclusions. 'Predicting' a fradulent transactions is not a practical application; instead, we performed this analysis to provide awareness about flagging these types of transactions. Key flags are: a transaction with a high amount and a transaction later in the day. During these periods, individuals should be more wary about their credit card use and ensure that they understand their credit card statements and purchases. Further analysis on the 'amount' variable revealed that, generally, transaction amounts increase during the holiday season (October to February). During these times, credit card companies and individual cardholders should regularly check and understand their statements. As credit card holders ourselves, we will be applying these practical insights into our own lives.
